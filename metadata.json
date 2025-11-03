@@ -1,0 +1,12 @@
+{
+  "name": "deadmau5 24/7 player",
+  "description": "Stream deadmau5's 24/7 live directly from your GNOME top panel",
+  "uuid": "deadmau5-player@ericfrs",
+  "shell-version": [
+    "47",
+    "48",
+    "49"
+  ],
+  "version": 2,
+  "url": "https://github.com/ericfrs/deadmau5-gnome"
+}
