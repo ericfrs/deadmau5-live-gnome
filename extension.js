@@ -174,8 +174,6 @@ class Deadmau5Indicator extends PanelMenu.Button {
             this._updateIcon();
             log('deadmau5-player: Now playing');
             
-            this._dismissActiveNotification();
-            
             this._notificationTimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 3, () => {
                 this._notificationTimeout = null;
                 if (this._isPlaying && this._playerProcess) {
