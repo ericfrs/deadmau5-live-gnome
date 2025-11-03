@@ -11,13 +11,13 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 
 const YOUTUBE_CHANNEL_URL = 'https://www.youtube.com/@deadmau5/live';
 const CHANNEL_IMAGE_URL = 'https://yt3.googleusercontent.com/gsIYpmjIShe3KyxlMqYlTeX9lL8_jRq3jPqVX4pxfkEBpKH3ePDsC5pKBH6jy00l8deAuo2LgQ=s160-c-k-c0x00ffffff-no-rj';
-const CACHE_DIR_NAME = 'deadmau5-gnome-extension';
-const ICON_CACHE_FILENAME = 'deadmau5-icon.jpg';
 
 const Deadmau5Indicator = GObject.registerClass(
 class Deadmau5Indicator extends PanelMenu.Button {
-    _init() {
+    _init(uuid) {
         super._init(0.0, 'deadmau5 Player');
+
+        this._uuid = uuid;
 
         this._icon = new St.Icon({
             icon_name: 'audio-x-generic-symbolic',
@@ -29,6 +29,7 @@ class Deadmau5Indicator extends PanelMenu.Button {
         this._playerProcess = null;
         this._notificationSource = null;
         this._albumArtPath = null;
+        this._streamUrl = null;
         this._reconnectTimeout = null;
         this._shouldBeePlaying = false;
         this._reconnectAttempts = 0;
@@ -92,19 +93,63 @@ class Deadmau5Indicator extends PanelMenu.Button {
         this._icon.icon_name = 'emblem-synchronizing-symbolic';
         log('deadmau5-player: Loading stream...');
 
+        const startAction = () => {
+            if (this._streamUrl) {
+                log('deadmau5-player: Using cached stream URL.');
+                this._playStream(this._streamUrl);
+            } else {
+                log('deadmau5-player: No cached URL, fetching new one.');
+                this._fetchStreamUrl();
+            }
+        };
+
         if (!this._albumArtPath) {
             this._downloadIcon(CHANNEL_IMAGE_URL, iconPath => {
                 this._albumArtPath = iconPath;
                 if (this._shouldBeePlaying && !this._playerProcess) {
-                    this._playStream();
+                    startAction();
                 }
             });
         } else {
-            this._playStream();
+            startAction();
         }
     }
 
-    _playStream() {
+    _fetchStreamUrl() {
+        try {
+            const subprocess = Gio.Subprocess.new(
+                ['yt-dlp', '-g', '-f', 'ba/b', YOUTUBE_CHANNEL_URL],
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE
+            );
+
+            subprocess.communicate_utf8_async(null, null, (source, result) => {
+                try {
+                    const [ok, stdout, stderr] = source.communicate_utf8_finish(result);
+
+                    if (!ok || !stdout.trim()) {
+                        logError(new Error(stderr || 'yt-dlp failed to get stream URL'));
+                        this._handlePlaybackError();
+                        return;
+                    }
+
+                    this._streamUrl = stdout.trim();
+                    log(`deadmau5-player: Fetched new stream URL: ${this._streamUrl}`);
+                    
+                    if (this._shouldBeePlaying) {
+                        this._playStream(this._streamUrl);
+                    }
+                } catch (e) {
+                    logError(e, 'Error fetching stream URL');
+                    this._handlePlaybackError();
+                }
+            });
+        } catch (e) {
+            logError(e, 'Error creating yt-dlp process');
+            this._handlePlaybackError();
+        }
+    }
+
+    _playStream(streamUrl) {
         if (this._playerProcess) {
             log('deadmau5-player: Player process already exists, stopping it first');
             this._killPlayerProcess();
@@ -120,7 +165,7 @@ class Deadmau5Indicator extends PanelMenu.Button {
                 [
                     'bash',
                     '-c',
-                    `exec yt-dlp --no-part --no-playlist -f ba/b -o - "${YOUTUBE_CHANNEL_URL}" | exec ffplay -nodisp -autoexit -vn -infbuf -i -`
+                    `exec ffplay -nodisp -autoexit -vn -infbuf -i "${streamUrl}"`
                 ],
                 Gio.SubprocessFlags.NONE
             );
@@ -154,6 +199,9 @@ class Deadmau5Indicator extends PanelMenu.Button {
                 this._dismissActiveNotification();
 
                 if (this._shouldBeePlaying) {
+                    log('deadmau5-player: Clearing cached URL due to unexpected stop.');
+                    this._streamUrl = null;
+
                     this._reconnectAttempts++;
                     if (this._reconnectAttempts <= this._maxReconnectAttempts) {
                         const delay = 2 + (this._reconnectAttempts * 2);
@@ -167,7 +215,7 @@ class Deadmau5Indicator extends PanelMenu.Button {
                         this._reconnectTimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, delay, () => {
                             this._reconnectTimeout = null;
                             if (this._shouldBeePlaying && !this._playerProcess) {
-                                this._playStream();
+                                this._fetchStreamUrl();
                             }
                             return GLib.SOURCE_REMOVE;
                         });
@@ -181,13 +229,18 @@ class Deadmau5Indicator extends PanelMenu.Button {
             });
         } catch (e) {
             logError(e, 'Error starting playback');
-            this._icon.icon_name = 'dialog-error-symbolic';
-            this._isPlaying = false;
-            Main.notify(
-                'deadmau5 Player', 
-                'Failed to start playback. Make sure yt-dlp and ffplay are installed.'
-            );
+            this._handlePlaybackError();
         }
+    }
+
+    _handlePlaybackError() {
+        this._icon.icon_name = 'dialog-error-symbolic';
+        this._isPlaying = false;
+        this._shouldBeePlaying = false;
+        Main.notify(
+            'deadmau5 Player', 
+            'Failed to start playback. Make sure yt-dlp and ffplay are installed.'
+        );
     }
 
     _killPlayerProcess() {
@@ -291,10 +344,11 @@ class Deadmau5Indicator extends PanelMenu.Button {
     }
 
     _downloadIcon(url, callback) {
+        const ICON_CACHE_FILENAME = 'deadmau5-icon.jpg';
         try {
             const cacheDir = GLib.build_filenamev([
                 GLib.get_user_cache_dir(), 
-                CACHE_DIR_NAME
+                this._uuid
             ]);
             GLib.mkdir_with_parents(cacheDir, 0o755);
             
@@ -331,6 +385,7 @@ class Deadmau5Indicator extends PanelMenu.Button {
 
     destroy() {
         this._stopPlayback(true);
+        this._streamUrl = null;
 
         if (this._notificationTimeout) {
             GLib.source_remove(this._notificationTimeout);
@@ -355,7 +410,7 @@ class Deadmau5Indicator extends PanelMenu.Button {
 
 export default class Deadmau5Extension extends Extension {
     enable() {
-        this._indicator = new Deadmau5Indicator();
+        this._indicator = new Deadmau5Indicator(this.uuid);
         Main.panel.addToStatusArea(this.uuid, this._indicator);
     }
 
