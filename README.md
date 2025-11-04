@@ -7,7 +7,7 @@ A GNOME Shell extension to stream deadmau5's 24/7 live broadcast directly from y
 ## Features
 
 - 🎧 Automatically plays deadmau5's live stream
-- 🖼️ Displays artist name and channel artwork in notifications
+- ℹ️ In-panel status messages for playback state
 - 🔄 Auto-reconnect on stream interruption
 - 🎛️ Simple click to play/pause from the top panel
 
