@@ -36,6 +36,7 @@ class Deadmau5Indicator extends PanelMenu.Button {
         this._maxReconnectAttempts = 3;
         this._notificationTimeout = null;
         this._activeNotification = null;
+        this._isBusy = false;
 
         this.connect('button-press-event', this._onButtonPress.bind(this));
         
@@ -68,12 +69,17 @@ class Deadmau5Indicator extends PanelMenu.Button {
     }
 
     _updateIcon() {
-        this._icon.icon_name = this._isPlaying 
-            ? 'media-playback-pause-symbolic' 
-            : 'audio-x-generic-symbolic';
+        this._icon.icon_name = this._isPlaying ?
+            'media-playback-pause-symbolic' :
+            'audio-x-generic-symbolic';
     }
 
     _onButtonPress(actor, event) {
+        if (this._isBusy) {
+            log('deadmau5-player: Action already in progress, ignoring click.');
+            return Clutter.EVENT_STOP;
+        }
+
         if (this._isPlaying) {
             this._stopPlayback();
         } else {
@@ -83,8 +89,10 @@ class Deadmau5Indicator extends PanelMenu.Button {
     }
 
     _startPlayback() {
+        this._isBusy = true;
         if (this._isPlaying || this._playerProcess) {
             log('deadmau5-player: Already playing or process exists, ignoring');
+            this._isBusy = false;
             return;
         }
 
@@ -137,6 +145,8 @@ class Deadmau5Indicator extends PanelMenu.Button {
                     
                     if (this._shouldBeePlaying) {
                         this._playStream(this._streamUrl);
+                    } else {
+                        this._isBusy = false;
                     }
                 } catch (e) {
                     logError(e, 'Error fetching stream URL');
@@ -173,6 +183,7 @@ class Deadmau5Indicator extends PanelMenu.Button {
             this._isPlaying = true;
             this._updateIcon();
             log('deadmau5-player: Now playing');
+            this._isBusy = false;
             
             this._notificationTimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 3, () => {
                 this._notificationTimeout = null;
@@ -235,6 +246,7 @@ class Deadmau5Indicator extends PanelMenu.Button {
         this._icon.icon_name = 'dialog-error-symbolic';
         this._isPlaying = false;
         this._shouldBeePlaying = false;
+        this._isBusy = false;
         Main.notify(
             'deadmau5 Player', 
             'Failed to start playback. Make sure yt-dlp and ffplay are installed.'
@@ -267,6 +279,7 @@ class Deadmau5Indicator extends PanelMenu.Button {
     }
 
     _stopPlayback(silent = false) {
+        this._isBusy = true;
         this._shouldBeePlaying = false;
         this._reconnectAttempts = 0;
 
@@ -288,8 +301,11 @@ class Deadmau5Indicator extends PanelMenu.Button {
         if (!silent) {
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
                 this._showNotification('deadmau5 24/7', 'Streaming stoppep');
+                this._isBusy = false;
                 return GLib.SOURCE_REMOVE;
             });
+        } else {
+            this._isBusy = false;
         }
     }
 
