@@ -6,10 +6,10 @@ A GNOME Shell extension to stream deadmau5's 24/7 live broadcast directly from y
 
 ## Features
 
-- 🎧 Automatically plays deadmau5's live stream
-- ℹ️ In-panel status messages for playback state
-- 🔄 Auto-reconnect on stream interruption
-- 🎛️ Simple click to play/pause from the top panel
+- 🎧 One-click playback of the official deadmau5 livestream
+- 📡 Smart controller with retry logic and cache-aware reconnects
+- ℹ️ Persistent in-panel status messages (Stopped, Loading…, Playing, Error)
+- 🎛️ Menu actions for play/stop and quick access to the YouTube channel
 
 ## Requirements
 
@@ -17,24 +17,24 @@ Before installing the extension, make sure you have the following dependencies i
 
 ### Arch Linux / Manjaro
 ```bash
-sudo pacman -S yt-dlp ffmpeg
+sudo pacman -S mpv yt-dlp
 ```
 
 ### Ubuntu / Debian
 ```bash
 sudo apt update
-sudo apt install yt-dlp ffmpeg
+sudo apt install mpv yt-dlp
 ```
 
 ### Fedora
 ```bash
-sudo dnf install yt-dlp ffmpeg
+sudo dnf install mpv yt-dlp
 ```
 
 ### openSUSE
 ```bash
-sudo zypper install yt-dlp ffmpeg
-```                        
+sudo zypper install mpv yt-dlp
+```
 
 ## Installation
 
@@ -44,7 +44,7 @@ git clone https://github.com/ericfrs/deadmau5-live-gnome.git
 cd deadmau5-live-gnome
 ```
 
-2. **Copy the extension to GNOME extensions directory:**
+2. **Copy the extension into GNOME's extensions directory:**
 ```bash
 mkdir -p ~/.local/share/gnome-shell/extensions/deadmau5-player@ericfrs
 cp -r * ~/.local/share/gnome-shell/extensions/deadmau5-player@ericfrs/
@@ -61,23 +61,16 @@ gnome-extensions enable deadmau5-player@ericfrs
 
 Or use the **Extensions** app (GNOME Extensions Manager).
 
-## Usage
-
-1. Once installed and enabled, you'll see an audio icon in the top panel
-2. **Click the icon** to start/stop playback
-3. The first time may take a few seconds while it fetches the stream URL
-4. Enjoy deadmau5 24/7! 🎶
-
 ## Troubleshooting
 
 ### Extension doesn't appear after installation
 - Make sure the directory has the correct name: `deadmau5-player@ericfrs`
 - Restart GNOME Shell completely
 
-### Error when playing
-- Verify `yt-dlp` is installed: `yt-dlp --version`
-- Verify `ffplay` is installed: `ffplay -version`
-- Check the logs: `journalctl -f -o cat /usr/bin/gnome-shell`
+### Stream fails to start or stops unexpectedly
+- Confirm dependencies: `mpv --version` and `yt-dlp --version`
+- Test the direct URL fetch: `yt-dlp -g -f ba/b https://www.youtube.com/@deadmau5/live`
+- Tail GNOME Shell logs for clues: `journalctl -f -o cat /usr/bin/gnome-shell | grep deadmau5`
 
 ### Stream doesn't start
 - Check your internet connection
@@ -94,5 +87,5 @@ Or use the **Extensions** app (GNOME Extensions Manager).
 
 ---
 
-**Note**: This is an unofficial extension and is not affiliated with deadmau5 or mau5trap.
+**Note:** This is an unofficial extension and is not affiliated with deadmau5 or mau5trap.
 
